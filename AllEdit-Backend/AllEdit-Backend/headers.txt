@@ -1,0 +1,7 @@
+HTTP/1.1 200 OK
+Content-Length: 36433
+Content-Type: application/pdf
+Date: Wed, 29 Apr 2026 13:40:57 GMT
+Server: Kestrel
+Content-Disposition: attachment; filename=images.pdf; filename*=UTF-8''images.pdf
+

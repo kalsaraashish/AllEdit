@@ -1,0 +1,156 @@
+﻿using AllEdit_Backend.Helpers;
+using AllEdit_Backend.Models;
+using AllEdit_Backend.Services.Interfaces;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
+
+namespace AllEdit_Backend.Services.Implementations;
+
+public sealed class ImageService : IImageService
+{
+    public async Task<byte[]> CompressAsync(IFormFile file, int quality, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidateImageFile(file);
+
+        await using var input = file.OpenReadStream();
+        using var image = await Image.LoadAsync(Configuration.Default, input, cancellationToken);
+        return await EncodeImageAsync(image, file.FileName, quality, cancellationToken);
+    }
+
+    public async Task<byte[]> ConvertAsync(IFormFile file, string format, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidateImageFile(file);
+
+        await using var input = file.OpenReadStream();
+        using var image = await Image.LoadAsync(Configuration.Default, input, cancellationToken);
+
+        return await EncodeImageAsync(image, $"output.{format}", 80, cancellationToken, format);
+    }
+
+    public async Task<byte[]> ResizeAsync(IFormFile file, int width, int height, bool keepAspectRatio, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidateImageFile(file);
+
+        await using var input = file.OpenReadStream();
+        using var image = await Image.LoadAsync(Configuration.Default, input, cancellationToken);
+
+        if (!keepAspectRatio)
+        {
+            if (width <= 0 || height <= 0)
+            {
+                throw new ArgumentException("Width and height must be greater than zero when aspect ratio is not preserved.");
+            }
+
+            var target = new Size(width, height);
+            image.Mutate(options => options.Resize(new ResizeOptions
+            {
+                Size = target,
+                Sampler = KnownResamplers.Lanczos3,
+                Mode = ResizeMode.Max
+            }));
+
+            return await EncodeImageAsync(image, file.FileName, 80, cancellationToken);
+        }
+
+        // keepAspectRatio == true
+        if (width <= 0 && height <= 0)
+        {
+            throw new ArgumentException("At least one of width or height must be provided when preserving aspect ratio.");
+        }
+
+        // Calculate missing dimension if needed
+        var srcWidth = image.Width;
+        var srcHeight = image.Height;
+
+        double ratio = (double)srcWidth / srcHeight;
+        int targetWidth = width > 0 ? width : (int)Math.Max(1, Math.Round(height * ratio));
+        int targetHeight = height > 0 ? height : (int)Math.Max(1, Math.Round(targetWidth / ratio));
+
+        var constrained = GetConstrainedSize(srcWidth, srcHeight, targetWidth, targetHeight);
+
+        image.Mutate(options => options.Resize(new ResizeOptions
+        {
+            Size = constrained,
+            Sampler = KnownResamplers.Lanczos3,
+            Mode = ResizeMode.Max
+        }));
+
+        return await EncodeImageAsync(image, file.FileName, 80, cancellationToken);
+    }
+
+    public async Task<ImageCompareResult> CompareAsync(IFormFile firstFile, IFormFile secondFile, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidateImageFile(firstFile);
+        FileHelper.ValidateImageFile(secondFile);
+
+        await using var firstInput = firstFile.OpenReadStream();
+        await using var secondInput = secondFile.OpenReadStream();
+        using var firstImage = await Image.LoadAsync<Rgba32>(Configuration.Default, firstInput, cancellationToken);
+        using var secondImage = await Image.LoadAsync<Rgba32>(Configuration.Default, secondInput, cancellationToken);
+
+        using var normalizedSecond = secondImage.Clone(context => context.Resize(firstImage.Width, firstImage.Height));
+        var totalDifference = 0L;
+
+        for (var y = 0; y < firstImage.Height; y++)
+        {
+            for (var x = 0; x < firstImage.Width; x++)
+            {
+                var firstPixel = firstImage[x, y];
+                var secondPixel = normalizedSecond[x, y];
+                totalDifference += Math.Abs(firstPixel.R - secondPixel.R);
+                totalDifference += Math.Abs(firstPixel.G - secondPixel.G);
+                totalDifference += Math.Abs(firstPixel.B - secondPixel.B);
+            }
+        }
+
+        var totalPixels = (long)firstImage.Width * firstImage.Height;
+        var maximumDifference = totalPixels * 3L * byte.MaxValue;
+        var differencePercentage = maximumDifference == 0 ? 0 : (totalDifference * 100d) / maximumDifference;
+
+        return new ImageCompareResult
+        {
+            AreIdentical = totalDifference == 0,
+            DifferencePercentage = Math.Round(differencePercentage, 2),
+            Width = firstImage.Width,
+            Height = firstImage.Height
+        };
+    }
+
+    private static async Task<byte[]> EncodeImageAsync(Image image, string fileName, int quality, CancellationToken cancellationToken, string? overrideFormat = null)
+    {
+        await using var output = new MemoryStream();
+        var extension = (overrideFormat ?? Path.GetExtension(fileName).TrimStart('.')).ToLowerInvariant();
+
+        switch (extension)
+        {
+            case "jpg":
+            case "jpeg":
+                await image.SaveAsJpegAsync(output, new JpegEncoder { Quality = Math.Clamp(quality, 1, 100) }, cancellationToken);
+                break;
+            case "png":
+                await image.SaveAsPngAsync(output, new PngEncoder(), cancellationToken);
+                break;
+            case "webp":
+                throw new ArgumentException("Unsupported output format. Use jpg or png.");
+            default:
+                await image.SaveAsJpegAsync(output, new JpegEncoder { Quality = Math.Clamp(quality, 1, 100) }, cancellationToken);
+                break;
+        }
+
+        return output.ToArray();
+    }
+
+    private static Size GetConstrainedSize(int sourceWidth, int sourceHeight, int maxWidth, int maxHeight)
+    {
+        var widthRatio = (double)maxWidth / sourceWidth;
+        var heightRatio = (double)maxHeight / sourceHeight;
+        var ratio = Math.Min(widthRatio, heightRatio);
+
+        return new Size(
+            Math.Max(1, (int)Math.Round(sourceWidth * ratio)),
+            Math.Max(1, (int)Math.Round(sourceHeight * ratio)));
+    }
+}
