@@ -33,6 +33,16 @@ public sealed class PdfController : ControllerBase
     public Task<IActionResult> WordToPdf([FromForm] WordToPdfRequest request, CancellationToken cancellationToken)
         => ExecuteFileAsync(() => _pdfService.WordToPdfAsync(request.file, cancellationToken), GetOutputName(request.file.FileName, "converted", ".pdf"), "application/pdf");
 
+    [HttpPost("pdf-to-word")]
+    [RequestSizeLimit(50L * 1024L * 1024L)]
+    public Task<IActionResult> PdfToWord([FromForm] PdfToWordRequest request, CancellationToken cancellationToken)
+        => ExecuteFileAsync(() => _pdfService.PdfToWordAsync(request.file, cancellationToken), GetOutputName(request.file.FileName, "converted", ".docx"), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+
+    [HttpPost("excel-to-pdf")]
+    [RequestSizeLimit(50L * 1024L * 1024L)]
+    public Task<IActionResult> ExcelToPdf([FromForm] ExcelToPdfRequest request, CancellationToken cancellationToken)
+        => ExecuteFileAsync(() => _pdfService.ExcelToPdfAsync(request.file, cancellationToken), GetOutputName(request.file.FileName, "converted", ".pdf"), "application/pdf");
+
     [HttpPost("powerpoint-to-pdf")]
     [RequestSizeLimit(50L * 1024L * 1024L)]
     public Task<IActionResult> PowerPointToPdf([FromForm] PowerPointToPdfRequest request, CancellationToken cancellationToken)

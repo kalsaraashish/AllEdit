@@ -40,6 +40,20 @@ const DOCUMENT_TOOLS = [
     icon: WordIcon,
   },
   {
+    title: 'Excel to PDF',
+    description: 'Convert XLS and XLSX spreadsheets to PDF.',
+    path: '/pdf/excel-to-pdf',
+    color: 'emerald',
+    icon: ExcelIcon,
+  },
+  {
+    title: 'PDF to Word',
+    description: 'Convert PDF files into editable DOCX documents.',
+    path: '/pdf/pdf-to-word',
+    color: 'teal',
+    icon: PdfToWordIcon,
+  },
+  {
     title: 'PowerPoint to PDF',
     description: 'Export PPT and PPTX presentations to PDF.',
     path: '/pdf/powerpoint-to-pdf',
@@ -232,6 +246,32 @@ function ResizeIcon({ size = 20 }) {
       <polyline points="9 21 3 21 3 15"/>
       <line x1="21" y1="3" x2="14" y2="10"/>
       <line x1="3" y1="21" x2="10" y2="14"/>
+    </svg>
+  )
+}
+
+function ExcelIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+      <polyline points="14 2 14 8 20 8"></polyline>
+      <path d="M8 13h2"></path>
+      <path d="M8 17h2"></path>
+      <path d="M14 13h2"></path>
+      <path d="M14 17h2"></path>
+    </svg>
+  )
+}
+
+function PdfToWordIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <path d="M8.5 12h7" />
+      <path d="M8.5 15.5h7" />
+      <path d="M16 18l3-3-3-3" />
+      <path d="M19 15H12" />
     </svg>
   )
 }

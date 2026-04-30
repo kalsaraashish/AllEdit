@@ -8,6 +8,13 @@ using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using Syncfusion.DocIO;
+using Syncfusion.DocIO.DLS;
+using Syncfusion.DocIORenderer;
+using Syncfusion.Presentation;
+using Syncfusion.PresentationRenderer;
+using Syncfusion.XlsIO;
+using Syncfusion.XlsIORenderer;
 using System.Diagnostics;
 using System.IO.Compression;
 
@@ -58,16 +65,81 @@ public sealed class PdfService : IPdfService
         return output.ToArray();
     }
 
-    public Task<byte[]> WordToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<byte[]> WordToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
     {
         FileHelper.ValidateWordFile(file);
-        return ConvertOfficeDocumentAsync(file, "pdf", cancellationToken);
+        await using var inputStream = file.OpenReadStream();
+        using var document = new WordDocument(inputStream, Syncfusion.DocIO.FormatType.Automatic);
+        using var render = new DocIORenderer();
+        using var pdfDocument = render.ConvertToPDF(document);
+        await using var outputStream = new MemoryStream();
+        pdfDocument.Save(outputStream);
+        return outputStream.ToArray();
     }
 
-    public Task<byte[]> PowerPointToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
+    public async Task<byte[]> PowerPointToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
     {
         FileHelper.ValidatePowerPointFile(file);
-        return ConvertOfficeDocumentAsync(file, "pdf", cancellationToken);
+        await using var inputStream = file.OpenReadStream();
+        using var presentation = Presentation.Open(inputStream);
+        using var pdfDocument = PresentationToPdfConverter.Convert(presentation);
+        await using var outputStream = new MemoryStream();
+        pdfDocument.Save(outputStream);
+        return outputStream.ToArray();
+    }
+
+    public async Task<byte[]> ExcelToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidateSpreadsheetFile(file);
+        await using var inputStream = file.OpenReadStream();
+        using var engine = new ExcelEngine();
+        var application = engine.Excel;
+        var workbook = application.Workbooks.Open(inputStream);
+        var renderer = new XlsIORenderer();
+        using var pdfDocument = renderer.ConvertToPDF(workbook);
+        await using var outputStream = new MemoryStream();
+        pdfDocument.Save(outputStream);
+        return outputStream.ToArray();
+    }
+
+    public async Task<byte[]> PdfToWordAsync(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidatePdfFile(file);
+
+        var zipBytes = await PdfToImageArchiveAsync(file, 150, "png", cancellationToken);
+
+        using var zipArchive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        using var wordDocument = new WordDocument();
+        
+        var entries = zipArchive.Entries.OrderBy(e => 
+        {
+            var name = Path.GetFileNameWithoutExtension(e.Name);
+            var numStr = name.Replace("page-", "");
+            return int.TryParse(numStr, out var num) ? num : 0;
+        }).ToList();
+
+        foreach (var entry in entries)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            await using var entryStream = entry.Open();
+            await using var memStream = new MemoryStream();
+            await entryStream.CopyToAsync(memStream, cancellationToken);
+            memStream.Position = 0;
+
+            var section = wordDocument.AddSection();
+            section.PageSetup.PageSize = new Syncfusion.Drawing.SizeF(595, 842);
+            section.PageSetup.Margins.All = 0;
+
+            var paragraph = section.AddParagraph();
+            var picture = paragraph.AppendPicture(memStream);
+            
+            picture.Width = section.PageSetup.PageSize.Width;
+            picture.Height = section.PageSetup.PageSize.Height;
+        }
+
+        await using var outputStream = new MemoryStream();
+        wordDocument.Save(outputStream, Syncfusion.DocIO.FormatType.Docx);
+        return outputStream.ToArray();
     }
 
     public async Task<byte[]> DocumentsToPdfAsync(IReadOnlyCollection<IFormFile> files, CancellationToken cancellationToken = default)
@@ -263,57 +335,15 @@ public sealed class PdfService : IPdfService
         return extension switch
         {
             ".pdf" => await FileHelper.ReadFileBytesAsync(file, cancellationToken),
-            ".doc" or ".docx" => await ConvertOfficeDocumentAsync(file, "pdf", cancellationToken),
-            ".xls" or ".xlsx" => await ConvertOfficeDocumentAsync(file, "pdf", cancellationToken),
-            ".ppt" or ".pptx" => await ConvertOfficeDocumentAsync(file, "pdf", cancellationToken),
+            ".doc" or ".docx" => await WordToPdfAsync(file, cancellationToken),
+            ".xls" or ".xlsx" => await ExcelToPdfAsync(file, cancellationToken),
+            ".ppt" or ".pptx" => await PowerPointToPdfAsync(file, cancellationToken),
             ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" => await ImageToPdfAsync(new[] { file }, cancellationToken),
             _ => throw new ArgumentException($"Unsupported file format: {extension}")
         };
     }
 
-    private async Task<byte[]> ConvertOfficeDocumentAsync(IFormFile file, string targetExtension, CancellationToken cancellationToken)
-    {
-        var tempFolder = CreateWorkingFolder();
-        var inputPath = Path.Combine(tempFolder, Path.GetFileName(file.FileName));
-        var outputFolder = Path.Combine(tempFolder, "output");
-        Directory.CreateDirectory(outputFolder);
 
-        await using (var inputStream = file.OpenReadStream())
-        await using (var outputStream = File.Create(inputPath))
-        {
-            await inputStream.CopyToAsync(outputStream, cancellationToken);
-        }
-
-        var executable = ResolveOfficeExecutable();
-        var arguments = new List<string>
-        {
-            "--headless",
-            "--nologo",
-            "--nofirststartwizard"
-        };
-
-        if (Path.GetExtension(file.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase) && 
-            targetExtension.Equals("docx", StringComparison.OrdinalIgnoreCase))
-        {
-            arguments.Add("--infilter=writer_pdf_import");
-        }
-
-        arguments.Add("--convert-to");
-        arguments.Add(targetExtension);
-        arguments.Add("--outdir");
-        arguments.Add(outputFolder);
-        arguments.Add(inputPath);
-
-        await RunProcessAsync(executable, arguments, tempFolder, cancellationToken);
-
-        var convertedPath = Directory.EnumerateFiles(outputFolder, $"*.{targetExtension}").FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(convertedPath) || !File.Exists(convertedPath))
-        {
-            throw new ArgumentException($"Unable to convert {Path.GetExtension(file.FileName)} file to {targetExtension}.");
-        }
-
-        return await File.ReadAllBytesAsync(convertedPath, cancellationToken);
-    }
 
     private async Task<byte[]> MergePdfBytesAsync(IReadOnlyCollection<byte[]> pdfBytes, CancellationToken cancellationToken)
     {
@@ -341,84 +371,6 @@ public sealed class PdfService : IPdfService
         }
 
         return output.ToArray();
-    }
-
-    private static async Task RunProcessAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
-    {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = executable,
-            WorkingDirectory = workingDirectory,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
-
-        foreach (var argument in arguments)
-        {
-            startInfo.ArgumentList.Add(argument);
-        }
-
-        try
-        {
-            using var process = Process.Start(startInfo) ?? throw new ArgumentException("Unable to start the Office converter.");
-            var standardOutputTask = process.StandardOutput.ReadToEndAsync();
-            var standardErrorTask = process.StandardError.ReadToEndAsync();
-
-            await process.WaitForExitAsync(cancellationToken);
-
-            var standardOutput = await standardOutputTask;
-            var standardError = await standardErrorTask;
-
-            if (process.ExitCode != 0)
-            {
-                var details = string.Join(Environment.NewLine, new[] { standardOutput, standardError }.Where(text => !string.IsNullOrWhiteSpace(text)));
-                if (string.IsNullOrWhiteSpace(details))
-                {
-                    details = $"The Office converter exited with code {process.ExitCode}.";
-                }
-
-                throw new ArgumentException(details.Trim());
-            }
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            throw new ArgumentException("LibreOffice was not found. Install LibreOffice or set SOFFICE_PATH to the converter executable.");
-        }
-    }
-
-    private static string ResolveOfficeExecutable()
-    {
-        var configuredPath = Environment.GetEnvironmentVariable("SOFFICE_PATH");
-        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
-        {
-            return configuredPath;
-        }
-
-        var commonPaths = new[]
-        {
-            @"C:\Program Files\LibreOffice\program\soffice.exe",
-            @"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
-        };
-
-        foreach (var path in commonPaths)
-        {
-            if (File.Exists(path))
-            {
-                return path;
-            }
-        }
-
-        return OperatingSystem.IsWindows() ? "soffice.exe" : "soffice";
-    }
-
-    private static string CreateWorkingFolder()
-    {
-        var rootFolder = FileHelper.EnsureTempFolder();
-        var workingFolder = Path.Combine(rootFolder, Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(workingFolder);
-        return workingFolder;
     }
 
     private static string NormalizeImageFormat(string? format)

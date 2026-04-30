@@ -168,6 +168,22 @@
   },
   {
     "ContainingType": "AllEdit_Backend.Controllers.PdfController",
+    "Method": "ExcelToPdf",
+    "RelativePath": "api/Pdf/excel-to-pdf",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "file",
+        "Type": "Microsoft.AspNetCore.Http.IFormFile",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "AllEdit_Backend.Controllers.PdfController",
     "Method": "ImageToPdf",
     "RelativePath": "api/Pdf/image-to-pdf",
     "HttpMethod": "POST",

@@ -7,7 +7,9 @@ import CompressPDF from './pages/pdf/CompressPDF'
 import ImageToPDF from './pages/pdf/ImageToPDF'
 import DocumentsToPDF from './pages/pdf/DocumentsToPDF'
 import WordToPDF from './pages/pdf/WordToPDF'
+import PDFToWord from './pages/pdf/PDFToWord'
 import PowerPointToPDF from './pages/pdf/PowerPointToPDF'
+import ExcelToPDF from './pages/pdf/ExcelToPDF'
 import PDFToImage from './pages/pdf/PDFToImage'
 import CompressImage from './pages/image/CompressImage'
 import ConvertImage from './pages/image/ConvertImage'
@@ -28,6 +30,8 @@ export default function App() {
               <Route path="/pdf/documents-to-pdf" element={<DocumentsToPDF />} />
               <Route path="/pdf/word-to-pdf" element={<WordToPDF />} />
               <Route path="/pdf/powerpoint-to-pdf" element={<PowerPointToPDF />} />
+              <Route path="/pdf/excel-to-pdf" element={<ExcelToPDF />} />
+              <Route path="/pdf/pdf-to-word" element={<PDFToWord />} />
               <Route path="/pdf/pdf-to-image" element={<PDFToImage />} />
               <Route path="/image/compress" element={<CompressImage />} />
               <Route path="/image/convert" element={<ConvertImage />} />

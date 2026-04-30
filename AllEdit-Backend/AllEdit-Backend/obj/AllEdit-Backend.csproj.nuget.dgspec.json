@@ -66,6 +66,22 @@
               "target": "Package",
               "version": "[8.1.4, )"
             },
+            "Syncfusion.DocIORenderer.Net.Core": {
+              "target": "Package",
+              "version": "[33.2.4, )"
+            },
+            "Syncfusion.Pdf.Net.Core": {
+              "target": "Package",
+              "version": "[33.2.4, )"
+            },
+            "Syncfusion.PresentationRenderer.Net.Core": {
+              "target": "Package",
+              "version": "[33.2.4, )"
+            },
+            "Syncfusion.XlsIORenderer.Net.Core": {
+              "target": "Package",
+              "version": "[33.2.4, )"
+            },
             "itext7": {
               "target": "Package",
               "version": "[9.6.0, )"

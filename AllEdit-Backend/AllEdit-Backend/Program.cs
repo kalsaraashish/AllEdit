@@ -1,7 +1,11 @@
+﻿using Syncfusion.Licensing; // ✅ Add this
+
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// ✅ Register Syncfusion License HERE (VERY IMPORTANT)
+SyncfusionLicenseProvider.RegisterLicense("Ngo9BigBOggjHTQxAR8/V1JHaF5cWWdCf1FpRmJGdld5fUVHYVZUTXxaS00DNHVRdkdlWXtdcHRdQmZeWUd/XkVWYEo=");
 
+// Add services to the container.
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
@@ -13,15 +17,17 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
+
 builder.Services.AddScoped<AllEdit_Backend.Services.Interfaces.IPdfService, AllEdit_Backend.Services.Implementations.PdfService>();
 builder.Services.AddScoped<AllEdit_Backend.Services.Interfaces.IImageService, AllEdit_Backend.Services.Implementations.ImageService>();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+
+// Swagger
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Configure pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();

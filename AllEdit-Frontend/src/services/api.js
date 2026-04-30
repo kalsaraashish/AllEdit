@@ -43,7 +43,8 @@ export const pdfApi = {
   imageToPdf:   (files)        => api.post('/pdf/image-to-pdf', form(files, {}, { multi: 'files' }), opts),
   documentsToPdf: (files)      => api.post('/pdf/documents-to-pdf', form(files, {}, { multi: 'files' }), opts),
   wordToPdf:    (file)         => api.post('/pdf/word-to-pdf', form(file, {}, { single: 'file' }), opts),
-
+  pdfToWord:    (file)         => api.post('/pdf/pdf-to-word', form(file, {}, { single: 'file' }), opts),
+  excelToPdf:   (file)         => api.post('/pdf/excel-to-pdf', form(file, {}, { single: 'file' }), opts),
   powerpointToPdf: (file)      => api.post('/pdf/powerpoint-to-pdf', form(file, {}, { single: 'file' }), opts),
   pdfToImage:   (file, format)  => api.post('/pdf/pdf-to-image', form(file, { format }, { single: 'file' }), opts),
   compare:      (file1, file2)  => api.post('/pdf/compare', form(file1, { file2 }, { first: 'firstFile', second: 'secondFile' }), {}),
