@@ -8,6 +8,7 @@ using PdfSharpCore.Pdf;
 using PdfSharpCore.Pdf.IO;
 using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.PixelFormats;
+using System.Diagnostics;
 using System.IO.Compression;
 
 namespace AllEdit_Backend.Services.Implementations;
@@ -18,21 +19,24 @@ public sealed class PdfService : IPdfService
     {
         ValidatePdfFiles(files);
 
-        var outputDocument = new PdfDocument();
-
-        foreach (var file in files)
+        await using var output = new MemoryStream();
+        using (var pdfWriter = new iText.Kernel.Pdf.PdfWriter(output))
+        using (var outputDocument = new iText.Kernel.Pdf.PdfDocument(pdfWriter))
         {
-            await using var input = file.OpenReadStream();
-            using var document = PdfReader.Open(input, PdfDocumentOpenMode.Import);
+            var merger = new iText.Kernel.Utils.PdfMerger(outputDocument);
 
-            foreach (var page in document.Pages)
+            foreach (var file in files)
             {
-                outputDocument.AddPage(page);
+                cancellationToken.ThrowIfCancellationRequested();
+
+                await using var input = file.OpenReadStream();
+                using var pdfReader = new iText.Kernel.Pdf.PdfReader(input);
+                using var document = new iText.Kernel.Pdf.PdfDocument(pdfReader);
+
+                merger.Merge(document, 1, document.GetNumberOfPages());
             }
         }
 
-        await using var output = new MemoryStream();
-        outputDocument.Save(output, false);
         return output.ToArray();
     }
 
@@ -54,6 +58,31 @@ public sealed class PdfService : IPdfService
         return output.ToArray();
     }
 
+    public Task<byte[]> WordToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidateWordFile(file);
+        return ConvertOfficeDocumentAsync(file, "pdf", cancellationToken);
+    }
+
+    public Task<byte[]> PowerPointToPdfAsync(IFormFile file, CancellationToken cancellationToken = default)
+    {
+        FileHelper.ValidatePowerPointFile(file);
+        return ConvertOfficeDocumentAsync(file, "pdf", cancellationToken);
+    }
+
+    public async Task<byte[]> DocumentsToPdfAsync(IReadOnlyCollection<IFormFile> files, CancellationToken cancellationToken = default)
+    {
+        ValidateMixedFiles(files);
+
+        var pdfFiles = new List<byte[]>(files.Count);
+        foreach (var file in files)
+        {
+            pdfFiles.Add(await ConvertMixedFileToPdfAsync(file, cancellationToken));
+        }
+
+        return await MergePdfBytesAsync(pdfFiles, cancellationToken);
+    }
+
     public async Task<byte[]> ImageToPdfAsync(IReadOnlyCollection<IFormFile> files, CancellationToken cancellationToken = default)
     {
         ValidateImageFiles(files);
@@ -71,8 +100,6 @@ public sealed class PdfService : IPdfService
                 page.Width = image.Width * 72d / 96d;
                 page.Height = image.Height * 72d / 96d;
 
-                // Explicitly convert to Jpeg format which is natively supported by XImage.
-                // Raw MemoryStream of WebP/GIF formats throws exceptions leading to 400 Bad Request.
                 await using var ms = new MemoryStream();
                 await image.SaveAsJpegAsync(ms, cancellationToken);
                 var compatibleBytes = ms.ToArray();
@@ -123,11 +150,8 @@ public sealed class PdfService : IPdfService
                     var renderHeight = Math.Max(1, (int)Math.Round(page.Height.Point * dpi / 72d));
 
                     byte[]? pixelBytes = null;
-
-                    // Try rendering with the computed dimensions. If that fails (some PDFs require
-                    // alternate orientation or a different dimension ordering), retry with swapped
-                    // width/height as a fallback.
                     Exception? firstEx = null;
+
                     try
                     {
                         using var docReader = DocLib.Instance.GetDocReader(pdfBytes, new PageDimensions(renderWidth, renderHeight));
@@ -137,7 +161,6 @@ public sealed class PdfService : IPdfService
                     catch (Exception ex)
                     {
                         firstEx = ex;
-                        // attempt fallback by swapping dimensions
                         try
                         {
                             using var docReader = DocLib.Instance.GetDocReader(pdfBytes, new PageDimensions(renderHeight, renderWidth));
@@ -146,12 +169,10 @@ public sealed class PdfService : IPdfService
                         }
                         catch (Exception ex2)
                         {
-                            // If both attempts fail, surface a combined message for diagnostics.
                             throw new ArgumentException($"Unable to render PDF page (first error: {firstEx.Message}; fallback error: {ex2.Message})");
                         }
                     }
 
-                    // Ensure the pixel buffer length matches the expected size for Bgra32 (4 bytes per pixel).
                     var expectedLength = checked(renderWidth * renderHeight * 4);
                     if (pixelBytes is null || pixelBytes.Length == 0)
                     {
@@ -166,7 +187,7 @@ public sealed class PdfService : IPdfService
                             Buffer.BlockCopy(pixelBytes, 0, padded, 0, pixelBytes.Length);
                             pixelBytes = padded;
                         }
-                        else // larger than expected - trim just in case
+                        else
                         {
                             var trimmed = new byte[expectedLength];
                             Buffer.BlockCopy(pixelBytes, 0, trimmed, 0, expectedLength);
@@ -174,7 +195,7 @@ public sealed class PdfService : IPdfService
                         }
                     }
 
-                    using var renderedImage = SixLabors.ImageSharp.Image.LoadPixelData<Bgra32>(pixelBytes, renderWidth, renderHeight);
+                    using var renderedImage = Image.LoadPixelData<Bgra32>(pixelBytes, renderWidth, renderHeight);
                     await using var imageStream = new MemoryStream();
 
                     var ext = normalizedFormat;
@@ -210,22 +231,6 @@ public sealed class PdfService : IPdfService
         }
     }
 
-    private static string NormalizeImageFormat(string? format)
-    {
-        var value = (format ?? string.Empty).Trim().TrimStart('.').ToLowerInvariant();
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return "png";
-        }
-
-        return value switch
-        {
-            "jpg" or "jpeg" => value,
-            "png" => "png",
-            _ => throw new ArgumentException("Unsupported output format. Use jpg or png.")
-        };
-    }
-
     public async Task<PdfCompareResult> CompareAsync(IFormFile firstFile, IFormFile secondFile, CancellationToken cancellationToken = default)
     {
         FileHelper.ValidatePdfFile(firstFile);
@@ -248,6 +253,187 @@ public sealed class PdfService : IPdfService
             DifferencePercentage = differencePercentage,
             FirstPageCount = firstDocument.PageCount,
             SecondPageCount = secondDocument.PageCount
+        };
+    }
+
+    private async Task<byte[]> ConvertMixedFileToPdfAsync(IFormFile file, CancellationToken cancellationToken)
+    {
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+
+        return extension switch
+        {
+            ".pdf" => await FileHelper.ReadFileBytesAsync(file, cancellationToken),
+            ".doc" or ".docx" => await ConvertOfficeDocumentAsync(file, "pdf", cancellationToken),
+            ".xls" or ".xlsx" => await ConvertOfficeDocumentAsync(file, "pdf", cancellationToken),
+            ".ppt" or ".pptx" => await ConvertOfficeDocumentAsync(file, "pdf", cancellationToken),
+            ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" => await ImageToPdfAsync(new[] { file }, cancellationToken),
+            _ => throw new ArgumentException($"Unsupported file format: {extension}")
+        };
+    }
+
+    private async Task<byte[]> ConvertOfficeDocumentAsync(IFormFile file, string targetExtension, CancellationToken cancellationToken)
+    {
+        var tempFolder = CreateWorkingFolder();
+        var inputPath = Path.Combine(tempFolder, Path.GetFileName(file.FileName));
+        var outputFolder = Path.Combine(tempFolder, "output");
+        Directory.CreateDirectory(outputFolder);
+
+        await using (var inputStream = file.OpenReadStream())
+        await using (var outputStream = File.Create(inputPath))
+        {
+            await inputStream.CopyToAsync(outputStream, cancellationToken);
+        }
+
+        var executable = ResolveOfficeExecutable();
+        var arguments = new List<string>
+        {
+            "--headless",
+            "--nologo",
+            "--nofirststartwizard"
+        };
+
+        if (Path.GetExtension(file.FileName).Equals(".pdf", StringComparison.OrdinalIgnoreCase) && 
+            targetExtension.Equals("docx", StringComparison.OrdinalIgnoreCase))
+        {
+            arguments.Add("--infilter=writer_pdf_import");
+        }
+
+        arguments.Add("--convert-to");
+        arguments.Add(targetExtension);
+        arguments.Add("--outdir");
+        arguments.Add(outputFolder);
+        arguments.Add(inputPath);
+
+        await RunProcessAsync(executable, arguments, tempFolder, cancellationToken);
+
+        var convertedPath = Directory.EnumerateFiles(outputFolder, $"*.{targetExtension}").FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(convertedPath) || !File.Exists(convertedPath))
+        {
+            throw new ArgumentException($"Unable to convert {Path.GetExtension(file.FileName)} file to {targetExtension}.");
+        }
+
+        return await File.ReadAllBytesAsync(convertedPath, cancellationToken);
+    }
+
+    private async Task<byte[]> MergePdfBytesAsync(IReadOnlyCollection<byte[]> pdfBytes, CancellationToken cancellationToken)
+    {
+        if (pdfBytes is null || pdfBytes.Count == 0)
+        {
+            throw new ArgumentException("At least one file is required.");
+        }
+
+        await using var output = new MemoryStream();
+        using (var pdfWriter = new iText.Kernel.Pdf.PdfWriter(output))
+        using (var outputDocument = new iText.Kernel.Pdf.PdfDocument(pdfWriter))
+        {
+            var merger = new iText.Kernel.Utils.PdfMerger(outputDocument);
+
+            foreach (var bytes in pdfBytes)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                using var input = new MemoryStream(bytes);
+                using var pdfReader = new iText.Kernel.Pdf.PdfReader(input);
+                using var document = new iText.Kernel.Pdf.PdfDocument(pdfReader);
+
+                merger.Merge(document, 1, document.GetNumberOfPages());
+            }
+        }
+
+        return output.ToArray();
+    }
+
+    private static async Task RunProcessAsync(string executable, IReadOnlyList<string> arguments, string workingDirectory, CancellationToken cancellationToken)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = executable,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true
+        };
+
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
+
+        try
+        {
+            using var process = Process.Start(startInfo) ?? throw new ArgumentException("Unable to start the Office converter.");
+            var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+            var standardErrorTask = process.StandardError.ReadToEndAsync();
+
+            await process.WaitForExitAsync(cancellationToken);
+
+            var standardOutput = await standardOutputTask;
+            var standardError = await standardErrorTask;
+
+            if (process.ExitCode != 0)
+            {
+                var details = string.Join(Environment.NewLine, new[] { standardOutput, standardError }.Where(text => !string.IsNullOrWhiteSpace(text)));
+                if (string.IsNullOrWhiteSpace(details))
+                {
+                    details = $"The Office converter exited with code {process.ExitCode}.";
+                }
+
+                throw new ArgumentException(details.Trim());
+            }
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            throw new ArgumentException("LibreOffice was not found. Install LibreOffice or set SOFFICE_PATH to the converter executable.");
+        }
+    }
+
+    private static string ResolveOfficeExecutable()
+    {
+        var configuredPath = Environment.GetEnvironmentVariable("SOFFICE_PATH");
+        if (!string.IsNullOrWhiteSpace(configuredPath) && File.Exists(configuredPath))
+        {
+            return configuredPath;
+        }
+
+        var commonPaths = new[]
+        {
+            @"C:\Program Files\LibreOffice\program\soffice.exe",
+            @"C:\Program Files (x86)\LibreOffice\program\soffice.exe"
+        };
+
+        foreach (var path in commonPaths)
+        {
+            if (File.Exists(path))
+            {
+                return path;
+            }
+        }
+
+        return OperatingSystem.IsWindows() ? "soffice.exe" : "soffice";
+    }
+
+    private static string CreateWorkingFolder()
+    {
+        var rootFolder = FileHelper.EnsureTempFolder();
+        var workingFolder = Path.Combine(rootFolder, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(workingFolder);
+        return workingFolder;
+    }
+
+    private static string NormalizeImageFormat(string? format)
+    {
+        var value = (format ?? string.Empty).Trim().TrimStart('.').ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "png";
+        }
+
+        return value switch
+        {
+            "jpg" or "jpeg" => value,
+            "png" => "png",
+            _ => throw new ArgumentException("Unsupported output format. Use jpg or png.")
         };
     }
 
@@ -274,6 +460,46 @@ public sealed class PdfService : IPdfService
         foreach (var file in files)
         {
             FileHelper.ValidateImageFile(file);
+        }
+    }
+
+    private static void ValidateMixedFiles(IReadOnlyCollection<IFormFile> files)
+    {
+        if (files is null || files.Count == 0)
+        {
+            throw new ArgumentException("At least one file is required.");
+        }
+
+        foreach (var file in files)
+        {
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            switch (extension)
+            {
+                case ".pdf":
+                    FileHelper.ValidatePdfFile(file);
+                    break;
+                case ".doc":
+                case ".docx":
+                    FileHelper.ValidateWordFile(file);
+                    break;
+                case ".xls":
+                case ".xlsx":
+                    FileHelper.ValidateSpreadsheetFile(file);
+                    break;
+                case ".ppt":
+                case ".pptx":
+                    FileHelper.ValidatePowerPointFile(file);
+                    break;
+                case ".jpg":
+                case ".jpeg":
+                case ".png":
+                case ".webp":
+                case ".gif":
+                    FileHelper.ValidateImageFile(file);
+                    break;
+                default:
+                    throw new ArgumentException($"Unsupported file format: {extension}");
+            }
         }
     }
 

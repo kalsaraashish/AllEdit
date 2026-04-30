@@ -5,6 +5,26 @@ public sealed class ImageToPdfRequest
     public List<IFormFile> files { get; set; } = [];
 }
 
+public sealed class DocumentsToPdfRequest
+{
+    public List<IFormFile> files { get; set; } = [];
+}
+
+public sealed class WordToPdfRequest
+{
+    public IFormFile file { get; set; } = default!;
+}
+
+public sealed class PowerPointToPdfRequest
+{
+    public IFormFile file { get; set; } = default!;
+}
+
+public sealed class PdfToWordRequest
+{
+    public IFormFile file { get; set; } = default!;
+}
+
 public sealed class PdfToImageRequest
 {
     public IFormFile file { get; set; } = default!;

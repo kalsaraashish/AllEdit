@@ -1,4 +1,5 @@
 import { useDropzone } from 'react-dropzone'
+import { useState } from 'react'
 import { formatBytes } from '../utils/format'
 
 export default function FileUpload({
@@ -17,6 +18,33 @@ export default function FileUpload({
     accept,
     multiple,
   })
+
+  const [draggedIndex, setDraggedIndex] = useState(null)
+
+  const handleDragStart = (e, index) => {
+    setDraggedIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    // Firefox requires some data to be set
+    e.dataTransfer.setData('text/plain', index)
+  }
+
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+  }
+
+  const handleDrop = (e, index) => {
+    e.preventDefault()
+    if (draggedIndex === null || draggedIndex === index) return
+
+    setFiles(prev => {
+      const copy = [...prev]
+      const [draggedFile] = copy.splice(draggedIndex, 1)
+      copy.splice(index, 0, draggedFile)
+      return copy
+    })
+    setDraggedIndex(null)
+  }
 
   return (
     <div className="space-y-3">
@@ -51,9 +79,21 @@ export default function FileUpload({
           {files.map((file, i) => (
             <li
               key={`${file.name}-${i}`}
-              className="flex items-center justify-between px-3.5 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg"
+              draggable={multiple}
+              onDragStart={(e) => multiple && handleDragStart(e, i)}
+              onDragOver={multiple ? handleDragOver : undefined}
+              onDrop={(e) => multiple && handleDrop(e, i)}
+              onDragEnd={() => setDraggedIndex(null)}
+              className={`flex items-center justify-between px-3.5 py-2.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-lg ${multiple ? 'cursor-grab active:cursor-grabbing' : ''} ${draggedIndex === i ? 'opacity-50' : 'opacity-100'}`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
+                {multiple && (
+                  <div className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 flex-shrink-0 cursor-grab px-1 flex items-center justify-center">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 8h16M4 16h16" />
+                    </svg>
+                  </div>
+                )}
                 <div className="w-7 h-7 bg-gray-100 dark:bg-gray-800 rounded-md flex items-center justify-center flex-shrink-0">
                   <svg className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -64,15 +104,17 @@ export default function FileUpload({
                   <p className="text-xs text-gray-400 dark:text-gray-500">{formatBytes(file.size)}</p>
                 </div>
               </div>
-              <button
-                onClick={() => onRemove(i)}
-                className="ml-2 w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex-shrink-0"
-                aria-label="Remove file"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onRemove(i)}
+                  className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-red-500 dark:hover:text-red-400 rounded transition-colors flex-shrink-0"
+                  aria-label="Remove file"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </li>
           ))}
         </ul>

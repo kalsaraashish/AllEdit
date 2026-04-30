@@ -18,6 +18,24 @@ public static class FileHelper
         ".gif"
     };
 
+    private static readonly HashSet<string> AllowedWordExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".doc",
+        ".docx"
+    };
+
+    private static readonly HashSet<string> AllowedSpreadsheetExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".xls",
+        ".xlsx"
+    };
+
+    private static readonly HashSet<string> AllowedPowerPointExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".ppt",
+        ".pptx"
+    };
+
 
     public static string EnsureTempFolder()
     {
@@ -34,6 +52,21 @@ public static class FileHelper
     public static void ValidateImageFile(IFormFile file)
     {
         ValidateFile(file, AllowedImageExtensions, "image");
+    }
+
+    public static void ValidateWordFile(IFormFile file)
+    {
+        ValidateFile(file, AllowedWordExtensions, "Word document");
+    }
+
+    public static void ValidateSpreadsheetFile(IFormFile file)
+    {
+        ValidateFile(file, AllowedSpreadsheetExtensions, "spreadsheet");
+    }
+
+    public static void ValidatePowerPointFile(IFormFile file)
+    {
+        ValidateFile(file, AllowedPowerPointExtensions, "PowerPoint file");
     }
 
     public static async Task<byte[]> ReadFileBytesAsync(IFormFile file, CancellationToken cancellationToken = default)

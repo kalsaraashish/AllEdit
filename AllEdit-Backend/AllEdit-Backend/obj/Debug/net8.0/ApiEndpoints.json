@@ -152,6 +152,22 @@
   },
   {
     "ContainingType": "AllEdit_Backend.Controllers.PdfController",
+    "Method": "DocumentsToPdf",
+    "RelativePath": "api/Pdf/documents-to-pdf",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "files",
+        "Type": "System.Collections.Generic.List\u00601[[Microsoft.AspNetCore.Http.IFormFile, Microsoft.AspNetCore.Http.Features, Version=8.0.0.0, Culture=neutral, PublicKeyToken=adb9793829ddae60]]",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "AllEdit_Backend.Controllers.PdfController",
     "Method": "ImageToPdf",
     "RelativePath": "api/Pdf/image-to-pdf",
     "HttpMethod": "POST",
@@ -203,6 +219,54 @@
       {
         "Name": "format",
         "Type": "System.String",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "AllEdit_Backend.Controllers.PdfController",
+    "Method": "PdfToWord",
+    "RelativePath": "api/Pdf/pdf-to-word",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "file",
+        "Type": "Microsoft.AspNetCore.Http.IFormFile",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "AllEdit_Backend.Controllers.PdfController",
+    "Method": "PowerPointToPdf",
+    "RelativePath": "api/Pdf/powerpoint-to-pdf",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "file",
+        "Type": "Microsoft.AspNetCore.Http.IFormFile",
+        "IsRequired": false
+      }
+    ],
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "AllEdit_Backend.Controllers.PdfController",
+    "Method": "WordToPdf",
+    "RelativePath": "api/Pdf/word-to-pdf",
+    "HttpMethod": "POST",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [
+      {
+        "Name": "file",
+        "Type": "Microsoft.AspNetCore.Http.IFormFile",
         "IsRequired": false
       }
     ],

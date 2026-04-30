@@ -8,6 +8,12 @@ public interface IPdfService
 
     Task<byte[]> CompressAsync(IFormFile file, CancellationToken cancellationToken = default);
 
+    Task<byte[]> WordToPdfAsync(IFormFile file, CancellationToken cancellationToken = default);
+
+    Task<byte[]> PowerPointToPdfAsync(IFormFile file, CancellationToken cancellationToken = default);
+
+    Task<byte[]> DocumentsToPdfAsync(IReadOnlyCollection<IFormFile> files, CancellationToken cancellationToken = default);
+
     Task<byte[]> ImageToPdfAsync(IReadOnlyCollection<IFormFile> files, CancellationToken cancellationToken = default);
 
     Task<byte[]> PdfToImageArchiveAsync(IFormFile file, int dpi, string format, CancellationToken cancellationToken = default);

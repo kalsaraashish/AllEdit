@@ -28,6 +28,29 @@ public sealed class PdfController : ControllerBase
         return await ExecuteFileAsync(() => _pdfService.MergeAsync(files ?? [], cancellationToken), "merged.pdf", "application/pdf");
     }
 
+    [HttpPost("word-to-pdf")]
+    [RequestSizeLimit(50L * 1024L * 1024L)]
+    public Task<IActionResult> WordToPdf([FromForm] WordToPdfRequest request, CancellationToken cancellationToken)
+        => ExecuteFileAsync(() => _pdfService.WordToPdfAsync(request.file, cancellationToken), GetOutputName(request.file.FileName, "converted", ".pdf"), "application/pdf");
+
+    [HttpPost("powerpoint-to-pdf")]
+    [RequestSizeLimit(50L * 1024L * 1024L)]
+    public Task<IActionResult> PowerPointToPdf([FromForm] PowerPointToPdfRequest request, CancellationToken cancellationToken)
+        => ExecuteFileAsync(() => _pdfService.PowerPointToPdfAsync(request.file, cancellationToken), GetOutputName(request.file.FileName, "converted", ".pdf"), "application/pdf");
+
+    [HttpPost("documents-to-pdf")]
+    [RequestSizeLimit(50L * 1024L * 1024L)]
+    public async Task<IActionResult> DocumentsToPdf([FromForm] DocumentsToPdfRequest request, CancellationToken cancellationToken)
+    {
+        IReadOnlyCollection<IFormFile> files = request?.files ?? [];
+        if ((files is null || files.Count == 0) && Request.HasFormContentType)
+        {
+            files = (await Request.ReadFormAsync(cancellationToken)).Files;
+        }
+
+        return await ExecuteFileAsync(() => _pdfService.DocumentsToPdfAsync(files ?? [], cancellationToken), "documents.pdf", "application/pdf");
+    }
+
     [HttpPost("compress")]
     [RequestSizeLimit(50L * 1024L * 1024L)]
     public Task<IActionResult> Compress([FromForm] CompressPdfRequest request, CancellationToken cancellationToken)
@@ -80,6 +103,17 @@ public sealed class PdfController : ControllerBase
         {
             return BadRequest(exception.Message);
         }
+    }
+
+    private static string GetOutputName(string originalFileName, string suffix, string extension)
+    {
+        var name = Path.GetFileNameWithoutExtension(originalFileName);
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            name = suffix;
+        }
+
+        return string.Concat(name, extension);
     }
 
 }
