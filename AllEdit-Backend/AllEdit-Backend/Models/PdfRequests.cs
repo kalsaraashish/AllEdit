@@ -25,11 +25,6 @@ public sealed class ExcelToPdfRequest
     public IFormFile file { get; set; } = default!;
 }
 
-public sealed class PdfToWordRequest
-{
-    public IFormFile file { get; set; } = default!;
-}
-
 public sealed class PdfToImageRequest
 {
     public IFormFile file { get; set; } = default!;

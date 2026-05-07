@@ -102,46 +102,6 @@ public sealed class PdfService : IPdfService
         return outputStream.ToArray();
     }
 
-    public async Task<byte[]> PdfToWordAsync(IFormFile file, CancellationToken cancellationToken = default)
-    {
-        FileHelper.ValidatePdfFile(file);
-
-        var zipBytes = await PdfToImageArchiveAsync(file, 150, "png", cancellationToken);
-
-        using var zipArchive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
-        using var wordDocument = new WordDocument();
-        
-        var entries = zipArchive.Entries.OrderBy(e => 
-        {
-            var name = Path.GetFileNameWithoutExtension(e.Name);
-            var numStr = name.Replace("page-", "");
-            return int.TryParse(numStr, out var num) ? num : 0;
-        }).ToList();
-
-        foreach (var entry in entries)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            await using var entryStream = entry.Open();
-            await using var memStream = new MemoryStream();
-            await entryStream.CopyToAsync(memStream, cancellationToken);
-            memStream.Position = 0;
-
-            var section = wordDocument.AddSection();
-            section.PageSetup.PageSize = new Syncfusion.Drawing.SizeF(595, 842);
-            section.PageSetup.Margins.All = 0;
-
-            var paragraph = section.AddParagraph();
-            var picture = paragraph.AppendPicture(memStream);
-            
-            picture.Width = section.PageSetup.PageSize.Width;
-            picture.Height = section.PageSetup.PageSize.Height;
-        }
-
-        await using var outputStream = new MemoryStream();
-        wordDocument.Save(outputStream, Syncfusion.DocIO.FormatType.Docx);
-        return outputStream.ToArray();
-    }
-
     public async Task<byte[]> DocumentsToPdfAsync(IReadOnlyCollection<IFormFile> files, CancellationToken cancellationToken = default)
     {
         ValidateMixedFiles(files);

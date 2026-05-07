@@ -33,6 +33,13 @@ const PDF_TOOLS = [
 
 const DOCUMENT_TOOLS = [
   {
+    title: 'Documents to PDF',
+    description: 'Drop Word, Excel, PowerPoint, PDF, or image files and get one final PDF.',
+    path: '/pdf/documents-to-pdf',
+    color: 'amber',
+    icon: DocumentsIcon,
+  },
+  {
     title: 'Word to PDF',
     description: 'Turn DOC and DOCX files into clean PDF documents.',
     path: '/pdf/word-to-pdf',
@@ -47,25 +54,11 @@ const DOCUMENT_TOOLS = [
     icon: ExcelIcon,
   },
   {
-    title: 'PDF to Word',
-    description: 'Convert PDF files into editable DOCX documents.',
-    path: '/pdf/pdf-to-word',
-    color: 'teal',
-    icon: PdfToWordIcon,
-  },
-  {
     title: 'PowerPoint to PDF',
     description: 'Export PPT and PPTX presentations to PDF.',
     path: '/pdf/powerpoint-to-pdf',
     color: 'rose',
     icon: PowerPointIcon,
-  },
-  {
-    title: 'Documents to PDF',
-    description: 'Drop Word, Excel, PowerPoint, PDF, or image files and get one final PDF.',
-    path: '/pdf/documents-to-pdf',
-    color: 'amber',
-    icon: DocumentsIcon,
   },
 ]
 
@@ -259,19 +252,6 @@ function ExcelIcon({ size = 20 }) {
       <path d="M8 17h2"></path>
       <path d="M14 13h2"></path>
       <path d="M14 17h2"></path>
-    </svg>
-  )
-}
-
-function PdfToWordIcon({ size = 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
-      <path d="M14 3v5h5" />
-      <path d="M8.5 12h7" />
-      <path d="M8.5 15.5h7" />
-      <path d="M16 18l3-3-3-3" />
-      <path d="M19 15H12" />
     </svg>
   )
 }

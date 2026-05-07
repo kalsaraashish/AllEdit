@@ -10,8 +10,6 @@ public interface IPdfService
 
     Task<byte[]> WordToPdfAsync(IFormFile file, CancellationToken cancellationToken = default);
 
-    Task<byte[]> PdfToWordAsync(IFormFile file, CancellationToken cancellationToken = default);
-
     Task<byte[]> ExcelToPdfAsync(IFormFile file, CancellationToken cancellationToken = default);
 
     Task<byte[]> PowerPointToPdfAsync(IFormFile file, CancellationToken cancellationToken = default);
